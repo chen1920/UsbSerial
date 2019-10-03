@@ -10,10 +10,6 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 
-import com.annimon.stream.Optional;
-import com.annimon.stream.Stream;
-import com.felhr.utils.Utils;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -57,29 +53,29 @@ public class SerialPortBuilder {
 
 
     public List<UsbDevice> getPossibleSerialPorts(Context context){
-
         usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
-
         HashMap<String, UsbDevice> allDevices = usbManager.getDeviceList();
-        List<UsbDevice> devices =  Stream.of(allDevices.values())
-                .filter(UsbSerialDevice::isSupported)
-                .toList();
-
+        List<UsbDevice> devices = new ArrayList<>();
+        for (UsbDevice device : allDevices.values()) {
+            if (UsbSerialDevice.isSupported(device)) {
+                devices.add(device);
+            }
+        }
         return devices;
     }
 
     public boolean getSerialPorts(Context context){
 
         initReceiver(context);
-
+        List<UsbDevice> deviceList = getPossibleSerialPorts(context);
         if(devices == null || devices.size() == 0) { // Not previous devices detected
-            devices = Stream.of(getPossibleSerialPorts(context))
-                    .map(UsbDeviceStatus::new)
-                    .toList();
-
-            if(devices.size() == 0)
+            devices = new ArrayList<>(deviceList.size());
+            for (UsbDevice device : deviceList) {
+                devices.add(new UsbDeviceStatus(device));
+            }
+            if (devices.size() == 0) {
                 return false;
-
+            }
             for(UsbDeviceStatus deviceStatus : devices){
                 queuedPermissions.add(createUsbPermission(context, deviceStatus));
             }
@@ -90,14 +86,16 @@ public class SerialPortBuilder {
 
         }else{ // Previous devices detected and maybe pending permissions intent launched
 
-            List<UsbDeviceStatus> newDevices = Stream.of(getPossibleSerialPorts(context))
-                    .map(UsbDeviceStatus::new)
-                    .filter(p -> !devices.contains(p))
-                    .toList();
-
-            if(newDevices.size() == 0)
+            List<UsbDeviceStatus> newDevices = new ArrayList<>(deviceList.size());
+            for (UsbDevice device : deviceList) {
+                UsbDeviceStatus status = new UsbDeviceStatus(device);
+                if(!devices.contains(status)) {
+                    newDevices.add(status);
+                }
+            }
+            if(newDevices.size() == 0) {
                 return false;
-
+            }
             for(UsbDeviceStatus deviceStatus : newDevices){
                 queuedPermissions.add(createUsbPermission(context, deviceStatus));
             }
@@ -125,22 +123,23 @@ public class SerialPortBuilder {
 
     public boolean disconnectDevice(UsbSerialDevice usbSerialDevice){
         usbSerialDevice.syncClose();
-        serialDevices = Utils.removeIf(serialDevices, p -> usbSerialDevice.getDeviceId() == p.getDeviceId());
+        for (int i = serialDevices.size() - 1; i >= 0; i--) {
+            if (serialDevices.get(i).getDeviceId() == usbSerialDevice.getDeviceId()) {
+                serialDevices.remove(i);
+            }
+        }
         return true;
     }
 
-    public boolean disconnectDevice(UsbDevice usbDevice){
-        List<UsbSerialDevice> devices = Stream.of(serialDevices)
-                .filter(p -> usbDevice.getDeviceId() == p.getDeviceId())
-                .toList();
-
+    public boolean disconnectDevice(UsbDevice usbDevice) {
         int removedDevices = 0;
-        for(UsbSerialDevice device : devices){
-            device.syncClose();
-            serialDevices = Utils.removeIf(serialDevices, p -> usbDevice.getDeviceId() == p.getDeviceId());
-            removedDevices ++;
+        for (int i = serialDevices.size() - 1; i >= 0; i--) {
+            if (serialDevices.get(i).getDeviceId() == usbDevice.getDeviceId()) {
+                serialDevices.get(i).syncClose();
+                serialDevices.remove(i);
+                removedDevices++;
+            }
         }
-
         return removedDevices == devices.size();
     }
 

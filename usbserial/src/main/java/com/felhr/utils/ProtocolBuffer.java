@@ -1,7 +1,5 @@
 package com.felhr.utils;
 
-import com.annimon.stream.IntStream;
-import com.annimon.stream.function.IntPredicate;
 
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
@@ -116,13 +114,7 @@ public class ProtocolBuffer {
 
         System.arraycopy(rawData, 0, rawBuffer, bufferPointer, rawData.length);
         bufferPointer += rawData.length;
-
-        SeparatorPredicate predicate = new SeparatorPredicate();
-        int[] indexes =
-                IntStream.range(0, bufferPointer)
-                        .filter(predicate)
-                        .toArray();
-
+        List<Integer> indexes = getSeparatorIndex(0, bufferPointer);
         int prevIndex = 0;
         for(Integer i : indexes){
             byte[] command = Arrays.copyOfRange(rawBuffer, prevIndex, i + separator.length);
@@ -140,18 +132,25 @@ public class ProtocolBuffer {
 
     }
 
-    private class SeparatorPredicate implements IntPredicate{
-        @Override
-        public boolean test(int value) {
-            if(rawBuffer[value] == separator[0]){
-                for(int i=1;i<=separator.length-1;i++){
-                    if(rawBuffer[value + i] != separator[i]){
-                        return false;
-                    }
-                }
-                return true;
+    private List<Integer> getSeparatorIndex(int off, int end) {
+        List<Integer> data = new ArrayList<>();
+        for (int i = off; i < end; i++) {
+            if (test(i)) {
+                data.add(i);
             }
-            return false;
         }
+        return data;
+    }
+
+    public boolean test(int value) {
+        if(rawBuffer[value] == separator[0]){
+            for(int i=1;i<=separator.length-1;i++){
+                if(rawBuffer[value + i] != separator[i]){
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
     }
 }
